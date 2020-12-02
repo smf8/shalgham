@@ -29,7 +29,7 @@ type (
 		Port     int    `koanf:"port"`
 		Username string `koanf:"username"`
 		Password string `koanf:"password"`
-		DBName   string `koanf"dbname"`
+		DBName   string `koanf:"dbname"`
 	}
 )
 
