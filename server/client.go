@@ -36,13 +36,13 @@ func (c *Client) ReadMessage() {
 }
 
 //SendMessage is for sending messages from channel to socket output buffer.
-//Run it only 1 time in a separate goroutine
+//Run it only 1 time in a separate goroutine.
 func (c *Client) SendMessage() {
 	for {
 		m := <-c.SendQueue
 		//TODO: implement message segmentation
 
-		if _, err := c.OutputBuffer.Write(m.ToJson()); err != nil {
+		if _, err := c.OutputBuffer.Write(m.ToJSON()); err != nil {
 			logrus.Errorf("failed to send message: %s\n", err)
 		}
 

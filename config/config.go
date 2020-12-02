@@ -38,7 +38,7 @@ func New() Config {
 
 	k := koanf.New(".")
 
-	if err := k.Load(structs.Provider(Default, "konaf"), nil); err != nil {
+	if err := k.Load(structs.Provider(def, "konaf"), nil); err != nil {
 		logrus.Fatalf("error loading default: %s", err)
 	}
 

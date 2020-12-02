@@ -18,8 +18,10 @@ func main(cfg config.Config) {
 	go sv.HandleClients()
 
 	logrus.Infof("started server in %s\n", cfg.Server.Address)
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+
 	s := <-sig
 
 	logrus.Infof("signal %s received", s)

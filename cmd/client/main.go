@@ -29,8 +29,8 @@ func main(addr string) {
 		OutputBuffer:   bufio.NewWriter(conn),
 		ReadBuffer:     bufio.NewReader(conn),
 		DisconnectChan: make(chan *server.Client),
-		SendQueue:      make(chan common.Msg, 128),
-		RecvQueue:      make(chan common.Msg, 128),
+		SendQueue:      make(chan common.Msg, server.ClientBufferSize),
+		RecvQueue:      make(chan common.Msg, server.ClientBufferSize),
 	}
 
 	go client.ReadMessage()
@@ -58,7 +58,6 @@ func main(addr string) {
 			case msg := <-client.RecvQueue:
 				fmt.Println("Got new message")
 				fmt.Println(msg)
-
 			}
 		}
 	}()
@@ -72,11 +71,12 @@ func main(addr string) {
 	s := <-sig
 
 	client.DisconnectChan <- client
+
 	logrus.Infof("signal %s received", s)
 	time.Sleep(1 * time.Second)
 }
 
-// Register client command
+// Register client command.
 func Register(root *cobra.Command) {
 	root.AddCommand(
 		&cobra.Command{
@@ -84,7 +84,7 @@ func Register(root *cobra.Command) {
 			Short: "Shalgham TCP chat client with a mighty TUI",
 			RunE: func(cmd *cobra.Command, args []string) error {
 				if len(args) != 1 {
-					return fmt.Errorf("usage: %s <address:port>\n", cmd.ValidArgs[0])
+					return fmt.Errorf("usage: %s <address:port>", cmd.ValidArgs[0])
 				}
 
 				main(args[0])

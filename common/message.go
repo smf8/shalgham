@@ -10,7 +10,7 @@ type Msg struct {
 	Data           []byte `json:"data"`
 }
 
-func (m *Msg) ToJson() []byte {
+func (m *Msg) ToJSON() []byte {
 	bytes, _ := json.Marshal(m)
 	return bytes
 }

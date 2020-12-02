@@ -2,8 +2,8 @@ package config
 
 const Namespace = "Shalgham"
 
-//nolint:lll
-var Default = Config{
+//nolint:lll,gochecknoglobals,gomnd
+var def = Config{
 	Debug: true,
 
 	Server: Server{

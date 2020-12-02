@@ -9,6 +9,9 @@ import (
 	"github.com/smf8/shalgham/config"
 )
 
+const ClientBufferSize = 1024
+const ServerBufferSize = 2048
+
 type Server struct {
 	connect    chan *Client
 	disconnect chan *Client
@@ -32,7 +35,7 @@ func (s *Server) Listen(cfg config.Server) {
 			Conn:           conn,
 			OutputBuffer:   bufio.NewWriter(conn),
 			ReadBuffer:     bufio.NewReader(conn),
-			SendQueue:      make(chan common.Msg, 1024),
+			SendQueue:      make(chan common.Msg, ClientBufferSize),
 			RecvQueue:      s.send,
 			DisconnectChan: s.disconnect,
 		}
@@ -48,9 +51,10 @@ func (s *Server) HandleClients() {
 	for {
 		select {
 		case c := <-s.connect:
-			// a client is trying to connect
 			logrus.Debugf("a client is trying to connect with Addr %s\n", c.Conn.RemoteAddr().String())
+
 			s.clients[c] = "undefined"
+
 		case c := <-s.disconnect:
 			if _, ok := s.clients[c]; ok {
 				close(c.SendQueue)
@@ -58,7 +62,6 @@ func (s *Server) HandleClients() {
 			}
 		case msg := <-s.send:
 			s.handleMsg(msg)
-
 		}
 	}
 }
@@ -79,7 +82,7 @@ func StartServer() *Server {
 	server := &Server{
 		connect:    make(chan *Client),
 		disconnect: make(chan *Client),
-		send:       make(chan common.Msg, 2048),
+		send:       make(chan common.Msg, ServerBufferSize),
 		clients:    make(map[*Client]string),
 	}
 

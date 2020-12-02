@@ -18,6 +18,7 @@ func (l *Login) GetMessage() common.Msg {
 	data, err := json.Marshal(l)
 	if err != nil {
 		logrus.Errorf("failed to create login message: %s", err)
+
 		data = []byte("error")
 	}
 
