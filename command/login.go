@@ -39,11 +39,10 @@ func (l *Login) GetMessage() common.Msg {
 	if err != nil {
 		logrus.Errorf("failed to create login message: %s", err)
 
-		data = []byte("error")
+		data = common.ErrorMessageData(err)
 	}
 
 	return common.Msg{
-		Digest:         "",
 		NumberOfParts:  1,
 		SequenceNumber: 1,
 		Type:           "login",

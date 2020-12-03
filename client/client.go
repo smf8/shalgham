@@ -67,7 +67,7 @@ func (c Client) Login(g *gocui.Gui, v *gocui.View) error {
 	loginCmd := command.CreateLoginCommand("test", "test")
 	msg := loginCmd.GetMessage()
 	msg.Sender = c.C.Conn.LocalAddr().String()
-
+	msg.Digest = msg.CheckSum()
 	c.C.SendQueue <- msg
 	//fmt.Println(v.Buffer())
 	//v.Clear()
@@ -82,6 +82,7 @@ func (c Client) Signup(g *gocui.Gui, v *gocui.View) error {
 	loginCmd := command.CreateSignupCommand("test", "test")
 	msg := loginCmd.GetMessage()
 	msg.Sender = c.C.Conn.LocalAddr().String()
+	msg.Digest = msg.CheckSum()
 
 	c.C.SendQueue <- msg
 	//fmt.Println(v.Buffer())
