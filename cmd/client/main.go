@@ -15,7 +15,7 @@ func main(addr string) {
 	defer conn.Close()
 
 	client.Login(nil, nil)
-	time.Sleep(10 * time.Second)
+	time.Sleep(40 * time.Second)
 }
 
 // Register client command.

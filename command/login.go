@@ -45,7 +45,7 @@ func (l *Login) GetMessage() common.Msg {
 	return common.Msg{
 		NumberOfParts:  1,
 		SequenceNumber: 1,
-		Type:           "login",
+		Type:           TypeLogin,
 		Data:           data,
 	}
 }

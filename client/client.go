@@ -50,6 +50,7 @@ func Connect(address string) (net.Conn, *Client) {
 				return
 			case msg := <-client.RecvQueue:
 				fmt.Println("Got message", msg)
+				fmt.Println("Message Data is: ", string(msg.Data))
 
 				if msg.Type == "login" {
 					c.HandleLogin(msg)
@@ -63,11 +64,15 @@ func Connect(address string) (net.Conn, *Client) {
 	return conn, c
 }
 
+//func (c Client) SendText(g *gocui.Gui, v *gocui.View) error {
+//	txtCmd :=
+//}
+
 func (c Client) Login(g *gocui.Gui, v *gocui.View) error {
 	loginCmd := command.CreateLoginCommand("test", "test")
 	msg := loginCmd.GetMessage()
 	msg.Sender = c.C.Conn.LocalAddr().String()
-	msg.Digest = msg.CheckSum()
+	msg.Digest = msg.CalculateChecksum()
 	c.C.SendQueue <- msg
 	//fmt.Println(v.Buffer())
 	//v.Clear()
@@ -82,7 +87,7 @@ func (c Client) Signup(g *gocui.Gui, v *gocui.View) error {
 	loginCmd := command.CreateSignupCommand("test", "test")
 	msg := loginCmd.GetMessage()
 	msg.Sender = c.C.Conn.LocalAddr().String()
-	msg.Digest = msg.CheckSum()
+	msg.Digest = msg.CalculateChecksum()
 
 	c.C.SendQueue <- msg
 	//fmt.Println(v.Buffer())

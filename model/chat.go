@@ -1,9 +1,16 @@
 package model
 
 import (
+	"errors"
 	"time"
 
 	"github.com/jinzhu/gorm"
+)
+
+var (
+	ErrMessageNotFound      = errors.New("message not found")
+	ErrParticipantNotFound  = errors.New("participant not found")
+	ErrConversationNotFound = errors.New("conversation not found")
 )
 
 type (
@@ -14,8 +21,9 @@ type (
 	}
 
 	Conversations struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
+		ID           int            `json:"id"`
+		Name         string         `json:"name"`
+		Participants []Participants `json:"participants"`
 	}
 
 	Message struct {
@@ -32,7 +40,9 @@ type ChatRepo interface {
 	SaveMessage(msg Message) error
 	SaveConversation(c Conversations) error
 	FindConversation(name string) (*Conversations, error)
+	FindConversations(userID int) ([]*Conversations, error)
 	FindMessages(cid int) ([]Message, error)
+	FindParticipants(cid int) ([]Participants, error)
 }
 
 type SQLChatRepo struct {
@@ -56,7 +66,7 @@ func (s SQLChatRepo) FindMessages(cid int) ([]Message, error) {
 
 	if err := s.DB.Where("conversation_id = ?", cid).Find(&msgs).Error; err != nil {
 		if gorm.IsRecordNotFoundError(err) {
-			return nil, ErrUserNotFound
+			return nil, ErrMessageNotFound
 		}
 
 		return nil, err
@@ -70,11 +80,42 @@ func (s SQLChatRepo) FindConversation(name string) (*Conversations, error) {
 
 	if err := s.DB.Where("name = ?", name).Find(conversation).Error; err != nil {
 		if gorm.IsRecordNotFoundError(err) {
-			return nil, ErrUserNotFound
+			return nil, ErrConversationNotFound
 		}
 
 		return nil, err
 	}
 
 	return conversation, nil
+}
+
+func (s SQLChatRepo) FindParticipants(cid int) ([]Participants, error) {
+	participants := make([]Participants, 0)
+
+	if err := s.DB.Where("conversation_id = ?", cid).Find(&participants).Error; err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return nil, ErrParticipantNotFound
+		}
+
+		return nil, err
+	}
+
+	return participants, nil
+}
+
+// fuck the new version of gorm !
+func (s SQLChatRepo) FindConversations(userID int) ([]*Conversations, error) {
+	conversations := make([]*Conversations, 0)
+
+	if err := s.DB.Raw(`SELECT * FROM conversations as c
+INNER JOIN (SELECT conversation_id FROM participants WHERE user_id = ?)
+as p ON p.conversation_id = c.id`, userID).Find(&conversations).Error; err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return nil, ErrConversationNotFound
+		}
+
+		return nil, err
+	}
+
+	return conversations, nil
 }

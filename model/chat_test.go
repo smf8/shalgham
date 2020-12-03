@@ -9,13 +9,13 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type CityResolutionRepoSuite struct {
+type ChatRepoSuite struct {
 	suite.Suite
 	repo     model.SQLChatRepo
 	userRepo model.SQLUserRepo
 }
 
-func (suite *CityResolutionRepoSuite) SetupSuite() {
+func (suite *ChatRepoSuite) SetupSuite() {
 	cfg := config.New()
 
 	postgresDB, err := postgres.Create(cfg.Postgres)
@@ -25,18 +25,8 @@ func (suite *CityResolutionRepoSuite) SetupSuite() {
 	suite.userRepo = model.SQLUserRepo{DB: postgresDB}
 }
 
-//func (suite *CityResolutionRepoSuite) SetupTest() {
-//  err := suite.repo.DB.Exec(`truncate table mess`).Error
-//  suite.NoError(err)
-//}
-//
-//func (suite *CityResolutionRepoSuite) TearDownTest() {
-//  err := suite.repo.DB.Exec(`truncate table city_resolutions`).Error
-//  suite.NoError(err)
-//}
-
 //nolint:funlen
-func (suite *CityResolutionRepoSuite) TestChat() {
+func (suite *ChatRepoSuite) TestChat() {
 	user1 := model.User{
 		Username: "user1",
 		Password: "user1",
@@ -81,6 +71,6 @@ func (suite *CityResolutionRepoSuite) TestChat() {
 	suite.Len(msgs, 2)
 }
 
-func TestCityResolutionRepoSuite(t *testing.T) {
-	suite.Run(t, new(CityResolutionRepoSuite))
+func TestChatRepoSuite(t *testing.T) {
+	suite.Run(t, new(ChatRepoSuite))
 }

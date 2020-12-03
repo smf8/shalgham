@@ -33,12 +33,15 @@ func ErrorMessageData(err error) json.RawMessage {
 	return j
 }
 
-func (m *Msg) CheckSum() string {
+func (m *Msg) ValidateCheckSum() bool {
 	digest := m.Digest
-	m.Digest = ""
+	return digest == m.CalculateChecksum()
+}
+
+func (m *Msg) CalculateChecksum() string {
 	checksum := sha256.Sum256([]byte(fmt.Sprintf("%v", m)))
 	result := fmt.Sprintf("%x", checksum)
-	m.Digest = digest
+	m.Digest = result
 
 	return result
 }

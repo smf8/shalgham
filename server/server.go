@@ -17,7 +17,7 @@ const ServerBufferSize = 2048
 type Server struct {
 	connect      chan *Client
 	disconnect   chan *Client
-	Clients      map[*Client]string
+	Clients      map[*Client]*model.User
 	routingTable map[string]*Client
 	send         chan common.Msg
 	ChatRepo     model.ChatRepo
@@ -58,22 +58,20 @@ func (s *Server) HandleClients() {
 		case c := <-s.connect:
 			logrus.Debugf("a client is trying to connect with Addr %s\n", c.Conn.RemoteAddr().String())
 			s.routingTable[c.Conn.RemoteAddr().String()] = c
-			s.Clients[c] = "undefined"
-
+			s.Clients[c] = nil
 		case c := <-s.disconnect:
-			if username, ok := s.Clients[c]; ok {
-				logrus.Infof("User %s with address %s disconnected", username, c.Conn.RemoteAddr().String())
+			if user, ok := s.Clients[c]; ok {
+				logrus.Infof("User %s with address %s disconnected", user.Username, c.Conn.RemoteAddr().String())
 				delete(s.routingTable, c.Conn.RemoteAddr().String())
 				close(c.SendQueue)
 				delete(s.Clients, c)
 
-				if username != "undefined" {
-					if err := s.UserRepo.Disconnect(username); err != nil {
+				if user != nil {
+					if err := s.UserRepo.Disconnect(user.Username); err != nil {
 						logrus.Errorf("could not disconnect user in database: %s", err)
 					}
 				}
 			}
-
 		case msg := <-s.send:
 			go s.handleMsg(msg)
 		}
@@ -84,6 +82,40 @@ func (s *Server) DisconnectUser(client *Client) {
 	s.disconnect <- client
 }
 
+func (s *Server) getUserStatusMsg() *common.Msg {
+	userStatusMsg := &common.Msg{}
+
+	onlineUsers, err := s.UserRepo.FindOnline()
+	if err != nil {
+		logrus.Errorf("failed to get online users: %s", err)
+
+		userStatusMsg = nil
+	} else {
+		userStatusCmd := command.UserStatus{Users: onlineUsers}
+		m := userStatusCmd.GetMessage()
+		userStatusMsg = &m
+		userStatusMsg.CalculateChecksum()
+	}
+
+	return userStatusMsg
+}
+
+func (s *Server) getConvStatusMsg(username string) *common.Msg {
+	convStatusMsg := &common.Msg{}
+	//sorry for here :D
+	conversations, err := s.ChatRepo.FindConversations(s.Clients[s.routingTable[username]].ID)
+	if err != nil {
+		logrus.Errorf("failed to get conversations list: %s", err)
+		convStatusMsg = nil
+	} else {
+		convStatusCmd := command.ConversationStatus{Conversations: conversations}
+		m := convStatusCmd.GetMessage()
+		convStatusMsg = &m
+		convStatusMsg.CalculateChecksum()
+	}
+
+	return convStatusMsg
+}
 func (s *Server) handleMsg(msg common.Msg) {
 	logrus.Debugf("received msg %v\n", msg)
 
@@ -127,7 +159,7 @@ func StartServer(chatRepo model.ChatRepo, userRepo model.UserRepo) *Server {
 		connect:      make(chan *Client),
 		disconnect:   make(chan *Client),
 		send:         make(chan common.Msg, ServerBufferSize),
-		Clients:      make(map[*Client]string),
+		Clients:      make(map[*Client]*model.User),
 		routingTable: make(map[string]*Client),
 		ChatRepo:     chatRepo,
 		UserRepo:     userRepo,
