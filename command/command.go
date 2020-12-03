@@ -6,4 +6,5 @@ const (
 	TypeSendText           = "send-text"
 	TypeUserStatus         = "user-status"
 	TypeConversationStatus = "conversation-status"
+	TypeJoinConversation   = "join-conversation"
 )
