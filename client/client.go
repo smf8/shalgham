@@ -7,17 +7,20 @@ import (
 
 	"github.com/jroimartin/gocui"
 	"github.com/sirupsen/logrus"
+	"github.com/smf8/shalgham/command"
 	"github.com/smf8/shalgham/common"
 	"github.com/smf8/shalgham/server"
 )
 
-func Connect(address string) (*net.Conn, *server.Client) {
+type Client struct {
+	C *server.Client
+}
+
+func Connect(address string) (net.Conn, *Client) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		logrus.Fatalf("failed connecting to server: %s\n", err)
 	}
-
-	defer conn.Close()
 
 	client := &server.Client{
 		Conn:           conn,
@@ -27,6 +30,8 @@ func Connect(address string) (*net.Conn, *server.Client) {
 		SendQueue:      make(chan common.Msg, server.ClientBufferSize),
 		RecvQueue:      make(chan common.Msg, server.ClientBufferSize),
 	}
+
+	c := &Client{client}
 
 	go client.ReadMessage()
 	go client.SendMessage()
@@ -44,21 +49,34 @@ func Connect(address string) (*net.Conn, *server.Client) {
 
 				return
 			case msg := <-client.RecvQueue:
-				fmt.Println("Got new message")
-				fmt.Println(msg)
+				fmt.Println("Got message", msg)
+
+				if msg.Type == "login" {
+					c.HandleLogin(msg)
+				}
 			}
 		}
 	}()
 
-	return &conn, client
+	return conn, c
 }
 
-func Login(g *gocui.Gui, v *gocui.View) error {
-	fmt.Println(v.Buffer())
-	v.Clear()
+func (c Client) Login(g *gocui.Gui, v *gocui.View) error {
+	loginCmd := command.CreateLoginCommand("user1", "user1")
+	loginCmd.Password = "user1"
+	msg := loginCmd.GetMessage()
+	msg.Sender = c.C.Conn.LocalAddr().String()
 
-	v.Title = "password"
-	//g.SetKeybinding("password", )
+	c.C.SendQueue <- msg
+	//fmt.Println(v.Buffer())
+	//v.Clear()
+	//
+	//v.Title = "password"
+	////g.SetKeybinding("password", )
 
 	return nil
+}
+
+func (c Client) HandleLogin(msg common.Msg) {
+	fmt.Println(string(msg.Data))
 }

@@ -2,16 +2,20 @@ package client
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/smf8/shalgham/client"
-	"github.com/smf8/shalgham/cmd/client/ui"
 	"github.com/spf13/cobra"
 )
 
 func main(addr string) {
-	ui.ShowUI()
+	//ui.ShowUI()
+	conn, client := client.Connect(addr)
 
-	client.Connect(addr)
+	defer conn.Close()
+
+	client.Login(nil, nil)
+	time.Sleep(10 * time.Second)
 }
 
 // Register client command.

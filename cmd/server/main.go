@@ -7,13 +7,19 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/smf8/shalgham/config"
+	"github.com/smf8/shalgham/model"
+	"github.com/smf8/shalgham/postgres"
 	"github.com/smf8/shalgham/server"
 	"github.com/spf13/cobra"
 )
 
 //nolint:funlen
 func main(cfg config.Config) {
-	sv := server.StartServer()
+	postgresDB := postgres.WithRetry(postgres.Create, cfg.Postgres)
+	userRepo := model.SQLUserRepo{DB: postgresDB}
+	chatRepo := model.SQLChatRepo{DB: postgresDB}
+
+	sv := server.StartServer(chatRepo, userRepo)
 	go sv.Listen(cfg.Server)
 	go sv.HandleClients()
 
