@@ -9,7 +9,27 @@ services:
       POSTGRES_DB: shalgham
       POSTGRES_PASSWORD: pass
       POSTGRES_USER: postgres
+    networks:
+      - postgres
     ports:
-      - 5432:5432
+      - "54320:5432"
     volumes:
       - ./data:/var/lib/postgresql/data
+
+  pgadmin:
+    container_name: pgadmin_container
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: pgadmin4@pgadmin.org
+      PGADMIN_DEFAULT_PASSWORD: admin
+    networks:
+      - postgres
+    volumes:
+      - .pgadmin:/root/.pgadmin
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+networks:
+  postgres:
+    driver: bridge

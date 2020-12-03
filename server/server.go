@@ -102,7 +102,23 @@ func (s *Server) handleMsg(msg common.Msg) {
 			return
 		}
 
-		logrus.Infof("logged in")
+		logrus.Infof("logged %s in", login.Username)
+	} else if msg.Type == "signup" {
+		signup, err := command.CreateSignupFromMsg(msg)
+		if err != nil {
+			logrus.Errorf("failed to handle signup command: %s", err)
+			return
+		}
+
+		err = HandleSignup(signup, s, s.routingTable[msg.Sender])
+		if err != nil {
+			logrus.Errorf("failed to handle signup command: %s", err)
+			s.DisconnectUser(s.routingTable[msg.Sender])
+
+			return
+		}
+
+		logrus.Infof("signed %s up", signup.Username)
 	}
 }
 

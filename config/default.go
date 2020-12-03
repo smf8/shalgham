@@ -16,7 +16,7 @@ var def = Config{
 
 	Postgres: Postgres{
 		Host:     "127.0.0.1",
-		Port:     5432,
+		Port:     54320,
 		DBName:   "shalgham",
 		Username: "postgres",
 		Password: "pass",

@@ -53,6 +53,8 @@ func Connect(address string) (net.Conn, *Client) {
 
 				if msg.Type == "login" {
 					c.HandleLogin(msg)
+				} else if msg.Type == "signup" {
+					c.HandleSignUp(msg)
 				}
 			}
 		}
@@ -62,8 +64,22 @@ func Connect(address string) (net.Conn, *Client) {
 }
 
 func (c Client) Login(g *gocui.Gui, v *gocui.View) error {
-	loginCmd := command.CreateLoginCommand("user1", "user1")
-	loginCmd.Password = "user1"
+	loginCmd := command.CreateLoginCommand("test", "test")
+	msg := loginCmd.GetMessage()
+	msg.Sender = c.C.Conn.LocalAddr().String()
+
+	c.C.SendQueue <- msg
+	//fmt.Println(v.Buffer())
+	//v.Clear()
+	//
+	//v.Title = "password"
+	////g.SetKeybinding("password", )
+
+	return nil
+}
+
+func (c Client) Signup(g *gocui.Gui, v *gocui.View) error {
+	loginCmd := command.CreateSignupCommand("test", "test")
 	msg := loginCmd.GetMessage()
 	msg.Sender = c.C.Conn.LocalAddr().String()
 
@@ -78,5 +94,9 @@ func (c Client) Login(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (c Client) HandleLogin(msg common.Msg) {
+	fmt.Println(string(msg.Data))
+}
+
+func (c Client) HandleSignUp(msg common.Msg) {
 	fmt.Println(string(msg.Data))
 }

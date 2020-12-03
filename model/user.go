@@ -49,5 +49,5 @@ func (s SQLUserRepo) Disconnect(username string) error {
 }
 
 func (s SQLUserRepo) Connect(username string) error {
-	return s.DB.Model(&User{}).Where("username = ?", username).Update("is_online", "true").Error
+	return s.DB.Model(&User{}).Where("username = ?", username).Update("is_online", true).Error
 }

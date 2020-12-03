@@ -6,7 +6,7 @@ export ROOT=$(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 
 export LDFLAGS="-w -s"
 
-export POSTGRES_ADDRESS=127.0.0.1:5432
+export POSTGRES_ADDRESS=127.0.0.1:54320
 export POSTGRES_DATABASE=shalgham
 export POSTGRES_USER=postgres
 export POSTGRES_PASSWORD=pass
