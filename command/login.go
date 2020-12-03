@@ -1,17 +1,37 @@
 package command
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 	"github.com/smf8/shalgham/common"
-	"github.com/smf8/shalgham/server"
 )
 
 type Login struct {
-	Sender   *server.Client `json:"-"`
-	Username string         `json:"username"`
-	Password string         `json:"password"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func CreateLoginCommand(username, password string) *Login {
+	cmd := &Login{
+		Username: username,
+	}
+
+	hash := sha256.Sum256([]byte(password))
+	cmd.Password = string(hash[:])
+
+	return cmd
+}
+
+func CreateLoginFromMsg(msg common.Msg) (*Login, error) {
+	login := &Login{}
+	if err := json.Unmarshal(msg.Data, login); err != nil {
+		return nil, fmt.Errorf("failed to parse data to login cmd: %s", err)
+	}
+
+	return login, nil
 }
 
 func (l *Login) GetMessage() common.Msg {
@@ -23,10 +43,10 @@ func (l *Login) GetMessage() common.Msg {
 	}
 
 	return common.Msg{
-		Sender:         l.Sender.Conn.RemoteAddr().String(),
 		Digest:         "",
 		NumberOfParts:  1,
 		SequenceNumber: 1,
+		Type:           "login",
 		Data:           data,
 	}
 }

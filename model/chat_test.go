@@ -1,7 +1,6 @@
 package model_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/smf8/shalgham/config"
@@ -78,8 +77,6 @@ func (suite *CityResolutionRepoSuite) TestChat() {
 
 	msgs, err := suite.repo.FindMessages(c.ID)
 	suite.NoError(err)
-
-	fmt.Println(msgs)
 
 	suite.Len(msgs, 2)
 }

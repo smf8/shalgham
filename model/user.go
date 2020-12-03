@@ -18,6 +18,8 @@ type User struct {
 type UserRepo interface {
 	Save(user User) error
 	FindUser(username string) (*User, error)
+	Disconnect(username string) error
+	Connect(username string) error
 }
 
 type SQLUserRepo struct {
@@ -40,4 +42,12 @@ func (s SQLUserRepo) FindUser(username string) (*User, error) {
 	}
 
 	return user, nil
+}
+
+func (s SQLUserRepo) Disconnect(username string) error {
+	return s.DB.Model(&User{}).Where("username = ?", username).Update("is_online", false).Error
+}
+
+func (s SQLUserRepo) Connect(username string) error {
+	return s.DB.Model(&User{}).Where("username = ?", username).Update("is_online", "true").Error
 }
