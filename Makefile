@@ -48,8 +48,8 @@ install:
 # Please do not use `make run` on production. There is a performance hit due to existence of -race flag.
 run-server:
 	go run -race -ldflags $(LDFLAGS) . server
-run-migrate:
-	go run -race -ldflags $(LDFLAGS) . migrate --path migrations
+run-client:
+	go run -race -ldflags $(LDFLAGS) . client localhost:1234
 
 ############################################################
 # Format and Lint
