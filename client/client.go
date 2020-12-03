@@ -2,6 +2,7 @@ package client
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"net"
 
@@ -9,11 +10,14 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/smf8/shalgham/command"
 	"github.com/smf8/shalgham/common"
+	"github.com/smf8/shalgham/model"
 	"github.com/smf8/shalgham/server"
 )
 
 type Client struct {
-	C *server.Client
+	C             *server.Client
+	OnlineUsers   map[string]*model.User
+	Conversations map[string]model.Conversations
 }
 
 func Connect(address string) (net.Conn, *Client) {
@@ -31,7 +35,7 @@ func Connect(address string) (net.Conn, *Client) {
 		RecvQueue:      make(chan common.Msg, server.ClientBufferSize),
 	}
 
-	c := &Client{client}
+	c := &Client{C: client}
 
 	go client.ReadMessage()
 	go client.SendMessage()
@@ -52,10 +56,12 @@ func Connect(address string) (net.Conn, *Client) {
 				fmt.Println("Got message", msg)
 				fmt.Println("Message Data is: ", string(msg.Data))
 
-				if msg.Type == "login" {
+				if msg.Type == command.TypeLogin {
 					c.HandleLogin(msg)
-				} else if msg.Type == "signup" {
+				} else if msg.Type == command.TypeSignup {
 					c.HandleSignUp(msg)
+				} else if msg.Type == command.TypeUserStatus {
+					c.HandleUserStatus(msg)
 				}
 			}
 		}
@@ -83,7 +89,7 @@ func (c Client) Login(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func (c Client) Signup(g *gocui.Gui, v *gocui.View) error {
+func (c *Client) Signup(g *gocui.Gui, v *gocui.View) error {
 	loginCmd := command.CreateSignupCommand("test", "test")
 	msg := loginCmd.GetMessage()
 	msg.Sender = c.C.Conn.LocalAddr().String()
@@ -99,10 +105,38 @@ func (c Client) Signup(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func (c Client) HandleLogin(msg common.Msg) {
+func (c *Client) HandleLogin(msg common.Msg) {
 	fmt.Println(string(msg.Data))
 }
 
-func (c Client) HandleSignUp(msg common.Msg) {
+func (c *Client) HandleSignUp(msg common.Msg) {
 	fmt.Println(string(msg.Data))
+}
+
+func (c *Client) HandleUserStatus(msg common.Msg) {
+	users := make([]*model.User, 0)
+
+	if err := json.Unmarshal(msg.Data, &users); err != nil {
+		logrus.Errorf("failed to parse user status: %s", err)
+	}
+
+	if len(c.OnlineUsers) == 0 {
+		for _, user := range users {
+			c.OnlineUsers[user.Username] = user
+		}
+	} else {
+		for username, user := range c.OnlineUsers {
+			found := false
+
+			for _, u := range users {
+				if u.Username == username {
+					found = true
+				}
+			}
+
+			if !found {
+				user.IsOnline = false
+			}
+		}
+	}
 }

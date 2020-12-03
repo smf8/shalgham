@@ -91,6 +91,10 @@ func (s *Server) getUserStatusMsg() *common.Msg {
 
 		userStatusMsg = nil
 	} else {
+		for user := range onlineUsers {
+			onlineUsers[user].Password = "zart!"
+		}
+
 		userStatusCmd := command.UserStatus{Users: onlineUsers}
 		m := userStatusCmd.GetMessage()
 		userStatusMsg = &m
