@@ -4,7 +4,10 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -80,6 +83,8 @@ func Connect(address string) (net.Conn, *Client) {
 					c.handleTextMessage(msg)
 				} else if msg.Type == command.TypeChangeUsername {
 					c.handleChangeUsername(msg)
+				} else if msg.Type == command.TypeFileMessage {
+					c.handleFile(msg)
 				}
 			}
 		}
@@ -98,7 +103,8 @@ func (c *Client) SubmitInput(g *gocui.Gui, v *gocui.View) error {
 	messages, _ := g.View("messages")
 
 	if strings.HasPrefix(input, "/join") {
-		cName := strings.TrimLeft(input, "/join ")
+		cName := strings.TrimLeft(input, "/join")
+		cName = strings.TrimSpace(cName)
 
 		v.Clear()
 		v.SetCursor(0, 0)
@@ -109,11 +115,40 @@ func (c *Client) SubmitInput(g *gocui.Gui, v *gocui.View) error {
 			return c.JoinConversation(g, v, cName, []string{c.username})
 		}
 	} else if strings.HasPrefix(input, "/change") {
-		newUsername := strings.TrimLeft(input, "/change ")
+		newUsername := strings.TrimLeft(input, "/change")
+		newUsername = strings.TrimSpace(newUsername)
 
 		c.ChangeUsername(c.username, newUsername)
 		v.Clear()
 		v.SetCursor(0, 0)
+	} else if strings.HasPrefix(input, "/file") {
+		if c.currentConv == nil {
+			v.Clear()
+			v.SetCursor(0, 0)
+
+			g.Update(func(g *gocui.Gui) error {
+				c.writeError("you must join a conversation first", messages)
+
+				return nil
+			})
+		} else {
+			filename := strings.TrimLeft(input, "/file")
+			filename = strings.TrimSpace(filename)
+
+			err := c.SendFile(filename)
+			if err != nil {
+				g.Update(func(g *gocui.Gui) error {
+					c.writeError(err.Error(), messages)
+
+					return nil
+				})
+			}
+
+			v.Clear()
+			v.SetCursor(0, 0)
+
+			return nil
+		}
 	} else {
 		if c.currentConv == nil {
 			v.Clear()
@@ -232,18 +267,18 @@ func (c *Client) Disconnect(g *gocui.Gui, v *gocui.View) error {
 
 func (c *Client) SendTextMsg(message string, g *gocui.Gui, v *gocui.View) error {
 	textMsg := command.CreateTextMessageCommand(c.username, message, c.currentConv.ID)
-	//messages, _ := g.View("messages")
+	messages, _ := g.View("messages")
 	msg := textMsg.GetMessage()
 	msg.Sender = c.C.Conn.LocalAddr().String()
 
-	//msgModel := model.Message{
-	//	Author:    c.username,
-	//	Body:      "message",
-	//	CreatedAT: time.Now(),
-	//}
+	msgModel := model.Message{
+		Author:    c.username,
+		Body:      message,
+		CreatedAT: time.Now(),
+	}
 
 	g.Update(func(g *gocui.Gui) error {
-		//c.writeMessage(msgModel, messages)
+		c.writeMessage(msgModel, messages)
 
 		return nil
 	})
@@ -253,14 +288,6 @@ func (c *Client) SendTextMsg(message string, g *gocui.Gui, v *gocui.View) error 
 	return nil
 }
 
-func (c *Client) HandleLogin(msg common.Msg) {
-	fmt.Println(string(msg.Data), runtime.NumGoroutine())
-}
-
-func (c *Client) HandleSignUp(msg common.Msg) {
-	//fmt.Println(string(msg.Data))
-}
-
 func (c *Client) ChangeUsername(oldname, newname string) error {
 	chUsernameCmd := command.CreateChangeUsernameCmd(oldname, newname)
 
@@ -268,6 +295,39 @@ func (c *Client) ChangeUsername(oldname, newname string) error {
 	msg.Sender = c.C.Conn.LocalAddr().String()
 
 	c.C.SendQueue <- msg
+
+	return nil
+}
+
+func (c *Client) SendFile(filePath string) error {
+	file, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("could not open file: %s", err)
+	}
+
+	messages, _ := c.ui.View("messages")
+
+	fileName := fmt.Sprintf("%s_%x.%q", c.username, file[:20], filepath.Ext(filePath))
+
+	c.ui.Update(func(g *gocui.Gui) error {
+		c.writeLog(fileName, messages)
+
+		return nil
+	})
+
+	sendFileCmd := command.CreateFileMessageCommand(c.username, fileName, c.currentConv.ID, file)
+
+	msgs := sendFileCmd.GetMessages()
+
+	for i := range msgs {
+		msgs[i].Sender = c.C.Conn.LocalAddr().String()
+
+		select {
+		case c.C.SendQueue <- msgs[i]:
+		}
+
+		<-time.After(50 * time.Millisecond)
+	}
 
 	return nil
 }
@@ -489,6 +549,51 @@ func (c *Client) handleChangeUsername(msg common.Msg) {
 	} else {
 		c.writeError("Could not change username", messages)
 	}
+}
+
+func (c *Client) handleFile(msg common.Msg) {
+	headerData, err := command.GetInfoFromMsg(msg)
+	if err != nil {
+		logrus.Errorf("failed to handle file", headerData)
+		return
+	}
+
+	f, err := os.OpenFile(headerData.FileName, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		logrus.Errorf("failed to open file: %s", err)
+		return
+	}
+
+	defer f.Close()
+
+	if _, err = f.Write(headerData.File); err != nil {
+		logrus.Errorf("failed to write file chunk: %s", err)
+	}
+
+	messages, _ := c.ui.View("messages")
+	if msg.SequenceNumber == 1 {
+		c.ui.Update(func(g *gocui.Gui) error {
+			c.writeLog(fmt.Sprintf("start saving file %s", headerData.FileName), messages)
+
+			return nil
+		})
+
+	}
+
+	if msg.SequenceNumber == msg.NumberOfParts {
+		c.ui.Update(func(g *gocui.Gui) error {
+			c.writeLog(fmt.Sprintf("save file %s completed", headerData.FileName), messages)
+
+			return nil
+		})
+	}
+}
+func (c *Client) HandleLogin(msg common.Msg) {
+	fmt.Println(string(msg.Data), runtime.NumGoroutine())
+}
+
+func (c *Client) HandleSignUp(msg common.Msg) {
+	//fmt.Println(string(msg.Data))
 }
 
 func (c *Client) writeMessage(msg model.Message, v *gocui.View) {

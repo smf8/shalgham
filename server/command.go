@@ -110,7 +110,7 @@ func HandleTextMessage(cmd *command.TextMessage, msg common.Msg,
 	// not efficient
 	for c, user := range server.Clients {
 		for _, p := range participants {
-			if user.ID == p.UserID {
+			if user.ID == p.UserID && server.Clients[c].Username != server.Clients[client].Username {
 				select {
 				case c.SendQueue <- msg:
 				}
@@ -224,6 +224,27 @@ func HandleChangeUsername(cmd *command.ChangeUsername, server *Server, client *C
 	response := cmd.GetMessage()
 
 	client.SendQueue <- response
+
+	return nil
+}
+
+func HandleFileMessage(cid int, msg common.Msg, server *Server, client *Client) error {
+
+	participants, err := server.ChatRepo.FindParticipants(cid)
+	if err != nil {
+		return fmt.Errorf("no participants found: %w", err)
+	}
+
+	// not efficient
+	for c, user := range server.Clients {
+		for _, p := range participants {
+			if user.ID == p.UserID && server.Clients[c].Username != server.Clients[client].Username {
+				select {
+				case c.SendQueue <- msg:
+				}
+			}
+		}
+	}
 
 	return nil
 }

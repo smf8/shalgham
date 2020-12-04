@@ -143,8 +143,7 @@ func (s *Server) getConvStatusMsg(username string) *common.Msg {
 	return convStatusMsg
 }
 func (s *Server) handleMsg(msg common.Msg) {
-	logrus.Debugf("received msg %v\n", msg)
-
+	//logrus.Debugf("received msg %v\n", msg)
 	if msg.Type == command.TypeLogin {
 		login, err := command.CreateLoginFromMsg(msg)
 		if err != nil {
@@ -220,6 +219,15 @@ func (s *Server) handleMsg(msg common.Msg) {
 
 		if err = HandleChangeUsername(changeUsername, s, s.routingTable[msg.Sender]); err != nil {
 			logrus.Errorf("failed to change username: %s", err)
+		}
+	} else if msg.Type == command.TypeFileMessage {
+		fileCmd, err := command.GetInfoFromMsg(msg)
+		if err != nil {
+			logrus.Errorf("failed to send file message: %s", err)
+		}
+
+		if err = HandleFileMessage(fileCmd.ConversationID, msg, s, s.routingTable[msg.Sender]); err != nil {
+			logrus.Errorf("failed to send file message: %s", err)
 		}
 	}
 }
