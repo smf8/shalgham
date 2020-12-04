@@ -21,6 +21,7 @@ type UserRepo interface {
 	Disconnect(username string) error
 	Connect(username string) error
 	FindOnline() ([]*User, error)
+	FindAll() ([]*User, error)
 }
 
 type SQLUserRepo struct {
@@ -57,6 +58,20 @@ func (s SQLUserRepo) FindOnline() ([]*User, error) {
 	users := make([]*User, 0)
 
 	if err := s.DB.Where("is_online = ?", true).Find(&users).Error; err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return nil, ErrUserNotFound
+		}
+
+		return nil, err
+	}
+
+	return users, nil
+}
+
+func (s SQLUserRepo) FindAll() ([]*User, error) {
+	users := make([]*User, 0)
+
+	if err := s.DB.Find(&users).Error; err != nil {
 		if gorm.IsRecordNotFoundError(err) {
 			return nil, ErrUserNotFound
 		}
