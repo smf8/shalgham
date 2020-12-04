@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jroimartin/gocui"
@@ -19,7 +21,9 @@ import (
 
 type Client struct {
 	C             *server.Client
+	userLock      sync.RWMutex
 	OnlineUsers   map[string]*model.User
+	convLock      sync.RWMutex
 	Conversations map[string]*model.Conversations
 	ui            *gocui.Gui
 }
@@ -102,6 +106,8 @@ func (c Client) Login(g *gocui.Gui, v *gocui.View) error {
 	g.SetViewOnTop("conversations")
 	g.SetCurrentView("input")
 
+	go c.LoadStatus(g)
+
 	return nil
 }
 
@@ -127,6 +133,8 @@ func (c *Client) Signup(g *gocui.Gui, v *gocui.View) error {
 	g.SetViewOnTop("conversations")
 	g.SetCurrentView("input")
 
+	//go c.LoadStatus(g)
+
 	return nil
 }
 
@@ -146,7 +154,7 @@ func (c *Client) Disconnect(g *gocui.Gui, v *gocui.View) error {
 	return gocui.ErrQuit
 }
 func (c *Client) HandleLogin(msg common.Msg) {
-	//fmt.Println(string(msg.Data))
+	fmt.Println(string(msg.Data), runtime.NumGoroutine())
 }
 
 func (c *Client) HandleSignUp(msg common.Msg) {
@@ -154,29 +162,38 @@ func (c *Client) HandleSignUp(msg common.Msg) {
 }
 
 func (c *Client) updateStatus() ([]string, []string) {
+	c.userLock.RLock()
 	usernames := make([]string, len(c.OnlineUsers))
+	c.userLock.RUnlock()
+	c.convLock.RLock()
 	conversations := make([]string, len(c.Conversations))
+	c.convLock.RUnlock()
 
 	i := 0
+	c.userLock.RLock()
 	for username, _ := range c.OnlineUsers {
 		usernames[i] = username
 		i++
 	}
+	c.userLock.RUnlock()
 
+	c.convLock.RLock()
 	i = 0
 	for cName := range c.Conversations {
 		conversations[i] = cName
 		i++
 	}
 
+	c.convLock.RUnlock()
 	sort.Strings(usernames)
 	sort.Strings(conversations)
 
 	return usernames, conversations
 }
-func (c *Client) LoadStatus() {
-	conversationMenu, _ := c.ui.View("conversations")
-	usersMenu, _ := c.ui.View("users")
+func (c *Client) LoadStatus(g *gocui.Gui) {
+
+	conversationMenu, _ := g.View("conversations")
+	usersMenu, _ := g.View("users")
 
 	for {
 		usernames, cNames := c.updateStatus()
@@ -189,12 +206,14 @@ func (c *Client) LoadStatus() {
 			users.WriteString(username)
 			users.WriteString("  ")
 
+			c.userLock.RLock()
 			if c.OnlineUsers[username].IsOnline {
 				onlineCount++
 				users.WriteString("ONLINE")
 			} else {
 				users.WriteString("OFFLINE")
 			}
+			c.userLock.RUnlock()
 
 			users.WriteString("\n")
 		}
@@ -203,13 +222,15 @@ func (c *Client) LoadStatus() {
 			conversations.WriteString(cname)
 			conversations.WriteString("  ")
 
+			c.convLock.RLock()
 			if !strings.Contains(c.Conversations[cname].Name, "#") {
 				conversations.WriteString("G ")
 				conversations.WriteString(fmt.Sprintf("%d", len(c.Conversations[cname].Participants)))
 			}
+			c.convLock.RUnlock()
 		}
 
-		c.ui.Update(func(g *gocui.Gui) error {
+		g.Update(func(g *gocui.Gui) error {
 			usersMenu.Title = fmt.Sprintf(" %d online users: ", onlineCount)
 			conversationMenu.Title = "Conversations"
 
@@ -220,7 +241,7 @@ func (c *Client) LoadStatus() {
 
 			return nil
 		})
-		time.After(250 * time.Millisecond)
+		<-time.After(250 * time.Millisecond)
 	}
 }
 func (c *Client) HandleConvStatus(msg common.Msg) {
@@ -230,7 +251,9 @@ func (c *Client) HandleConvStatus(msg common.Msg) {
 	}
 
 	for _, conv := range conversations {
+		c.convLock.Lock()
 		c.Conversations[conv.Name] = conv
+		c.convLock.Unlock()
 		//fmt.Println(conv)
 	}
 }
@@ -244,17 +267,24 @@ func (c *Client) HandleUserStatus(msg common.Msg) {
 		logrus.Errorf("failed to parse user status: %s", err)
 	}
 
+	c.userLock.RLock()
 	if len(c.OnlineUsers) == 0 {
+		c.userLock.RUnlock()
 		for _, user := range users.Users {
+
+			c.userLock.Lock()
 			c.OnlineUsers[user.Username] = user
+			c.userLock.Unlock()
 			//fmt.Println(user)
 		}
 	} else {
+		c.userLock.RLock()
 		for username, user := range c.OnlineUsers {
 			found := false
 
 			for _, u := range users.Users {
 				if u.Username == username {
+					user.IsOnline = true
 					found = true
 				}
 			}
@@ -263,5 +293,6 @@ func (c *Client) HandleUserStatus(msg common.Msg) {
 				user.IsOnline = false
 			}
 		}
+		c.userLock.RUnlock()
 	}
 }

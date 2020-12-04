@@ -47,9 +47,9 @@ install:
 
 # Please do not use `make run` on production. There is a performance hit due to existence of -race flag.
 run-server:
-	go run -race -ldflags $(LDFLAGS) . server
+	go run -ldflags $(LDFLAGS) . server
 run-client:
-	go run -race -ldflags $(LDFLAGS) . client localhost:1234
+	go run -ldflags $(LDFLAGS) . client localhost:1234
 
 ############################################################
 # Format and Lint

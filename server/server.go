@@ -48,6 +48,7 @@ func (s *Server) Listen(cfg config.Server) {
 
 		go c.ReadMessage()
 		go c.SendMessage()
+		go notifyOnlines(s)
 
 		s.connect <- c
 	}
@@ -83,12 +84,13 @@ func (s *Server) DisconnectUser(client *Client) {
 	s.disconnect <- client
 }
 
-func (s *Server) getUserStatusMsg() *common.Msg {
+func (s *Server) getUserStatusMsg(users []*model.User) *common.Msg {
 	userStatusMsg := &common.Msg{}
 
-	onlineUsers, err := s.UserRepo.FindOnline()
-	if err != nil {
-		logrus.Errorf("failed to get online users: %s", err)
+	onlineUsers := users
+
+	if users == nil {
+		logrus.Errorf("failed to get online users")
 
 		userStatusMsg = nil
 	} else if len(onlineUsers) != 0 {
@@ -97,17 +99,16 @@ func (s *Server) getUserStatusMsg() *common.Msg {
 
 		}
 
-		client, user := s.findUser(onlineUsers[0].Username)
-		if user == nil {
-			logrus.Errorf("failed getting conversation status, username not found in server")
-
-			return nil
+		sender := ""
+		for client, _ := range s.Clients {
+			sender = client.Conn.LocalAddr().String()
+			break
 		}
 
 		userStatusCmd := command.UserStatus{Users: onlineUsers}
 		m := userStatusCmd.GetMessage()
 		userStatusMsg = &m
-		userStatusMsg.Sender = client.Conn.LocalAddr().String()
+		userStatusMsg.Sender = sender
 		userStatusMsg.CalculateChecksum()
 	} else {
 

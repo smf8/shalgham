@@ -123,7 +123,7 @@ func (s SQLChatRepo) FindConversations(userID int) ([]*Conversations, error) {
 		conversations = append(conversations, &Conversations{ID: cids[i].ID})
 	}
 
-	if err := s.DB.Debug().Model(&Conversations{}).Preload("Messages").Preload("Participants").
+	if err := s.DB.Model(&Conversations{}).Preload("Messages").Preload("Participants").
 		Find(&conversations).Error; err != nil {
 		if gorm.IsRecordNotFoundError(err) {
 			return nil, ErrConversationNotFound

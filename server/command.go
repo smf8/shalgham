@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/smf8/shalgham/command"
@@ -30,11 +31,16 @@ func HandleSignup(cmd *command.Signup, server *Server, client *Client) error {
 	server.Clients[client] = &user
 	client.SendQueue <- response
 
-	if userStatus := server.getUserStatusMsg(); userStatus != nil {
-		client.SendQueue <- *userStatus
+	users, err := server.UserRepo.FindAll()
+	if err != nil {
+		logrus.Errorf("failed to get all users: %s", err)
+	} else {
+		if userStatus := server.getUserStatusMsg(users); userStatus != nil {
+			client.SendQueue <- *userStatus
+		}
 	}
 
-	if convStatus := server.getUserStatusMsg(); convStatus != nil {
+	if convStatus := server.getConvStatusMsg(cmd.Username); convStatus != nil {
 		client.SendQueue <- *convStatus
 	}
 
@@ -57,12 +63,16 @@ func HandleLogin(cmd *command.Login, server *Server, client *Client) error {
 	response.Sender = client.Conn.LocalAddr().String()
 	response.Data = common.SuccessDataMessage()
 
-	client.SendQueue <- response
-	if userStatus := server.getUserStatusMsg(); userStatus != nil {
-		client.SendQueue <- *userStatus
+	users, err := server.UserRepo.FindAll()
+	if err != nil {
+		logrus.Errorf("failed to get all users: %s", err)
+	} else {
+		if userStatus := server.getUserStatusMsg(users); userStatus != nil {
+			client.SendQueue <- *userStatus
+		}
 	}
 
-	if convStatus := server.getUserStatusMsg(); convStatus != nil {
+	if convStatus := server.getConvStatusMsg(cmd.Username); convStatus != nil {
 		client.SendQueue <- *convStatus
 	}
 
@@ -149,6 +159,28 @@ func HandleJoinConv(cmd *command.JoinConversation, userIDs []int, server *Server
 
 	response := server.getConvStatusMsg(cmd.Participants[0])
 	client.SendQueue <- *response
+
+	return nil
+}
+
+func notifyOnlines(server *Server) error {
+	for {
+		users, err := server.UserRepo.FindOnline()
+		if err != nil {
+			logrus.Errorf("failed to get all users: %s", err)
+		} else {
+			if userStatus := server.getUserStatusMsg(users); userStatus != nil {
+				for client, user := range server.Clients {
+					if user.Username != "undefined" {
+						logrus.Infof("dili dili dili %s %v", user.Username, users)
+						client.SendQueue <- *userStatus
+					}
+				}
+			}
+		}
+
+		<-time.After(1500 * time.Millisecond)
+	}
 
 	return nil
 }
