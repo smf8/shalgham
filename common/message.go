@@ -15,6 +15,9 @@ type Msg struct {
 	Data           json.RawMessage `json:"data"`
 }
 
+type TextMessage struct {
+}
+
 func SuccessDataMessage() json.RawMessage {
 	m := map[string]string{
 		"data": "success",
