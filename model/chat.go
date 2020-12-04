@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -15,15 +16,15 @@ var (
 
 type (
 	Participants struct {
-		ID             int `json:"id"`
+		ID             int `gorm:"primary_key"`
 		ConversationID int `json:"conversation_id"`
 		UserID         int `json:"user_id"`
 	}
 
 	Conversations struct {
-		ID           int            `json:"id"`
+		ID           int            `gorm:"primary_key"`
 		Name         string         `json:"name"`
-		Participants []Participants `json:"participants"`
+		Participants []Participants `json:"participants" gorm:"foreignkey:ConversationID;references:ID"`
 	}
 
 	Message struct {
@@ -106,10 +107,21 @@ func (s SQLChatRepo) FindParticipants(cid int) ([]Participants, error) {
 // fuck the new version of gorm !
 func (s SQLChatRepo) FindConversations(userID int) ([]*Conversations, error) {
 	conversations := make([]*Conversations, 0)
+	cids := make([]*Participants, 0)
 
-	if err := s.DB.Raw(`SELECT * FROM conversations as c
-INNER JOIN (SELECT conversation_id FROM participants WHERE user_id = ?)
-as p ON p.conversation_id = c.id`, userID).Find(&conversations).Error; err != nil {
+	if err := s.DB.Where("user_id = ?", userID).Select("ID").Find(&cids).Error; err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return nil, ErrConversationNotFound
+		}
+
+		return nil, err
+	}
+
+	for i := range cids {
+		conversations = append(conversations, &Conversations{ID: cids[i].ID})
+	}
+
+	if err := s.DB.Debug().Model(&Conversations{}).Preload("Participants").Find(&conversations).Error; err != nil {
 		if gorm.IsRecordNotFoundError(err) {
 			return nil, ErrConversationNotFound
 		}

@@ -10,13 +10,15 @@ import (
 
 type JoinConversation struct {
 	ConversationName string   `json:"conversation_name"`
+	IsGroup          bool     `json:"is_group"`
 	Participants     []string `json:"participants"`
 }
 
-func CreateJoinConvCmd(cName string, participants []string) *JoinConversation {
+func CreateJoinConvCmd(cName string, isGroup bool, participants []string) *JoinConversation {
 	return &JoinConversation{
 		ConversationName: cName,
 		Participants:     participants,
+		IsGroup:          isGroup,
 	}
 }
 

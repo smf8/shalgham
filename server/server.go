@@ -15,9 +15,10 @@ const ClientBufferSize = 1024
 const ServerBufferSize = 2048
 
 type Server struct {
-	connect      chan *Client
-	disconnect   chan *Client
-	Clients      map[*Client]*model.User
+	connect    chan *Client
+	disconnect chan *Client
+	Clients    map[*Client]*model.User
+	//routing table from <address:port> to clients
 	routingTable map[string]*Client
 	send         chan common.Msg
 	ChatRepo     model.ChatRepo
@@ -58,7 +59,7 @@ func (s *Server) HandleClients() {
 		case c := <-s.connect:
 			logrus.Debugf("a client is trying to connect with Addr %s\n", c.Conn.RemoteAddr().String())
 			s.routingTable[c.Conn.RemoteAddr().String()] = c
-			s.Clients[c] = nil
+			s.Clients[c] = &model.User{Username: "undefined"}
 		case c := <-s.disconnect:
 			if user, ok := s.Clients[c]; ok {
 				logrus.Infof("User %s with address %s disconnected", user.Username, c.Conn.RemoteAddr().String())
@@ -90,15 +91,27 @@ func (s *Server) getUserStatusMsg() *common.Msg {
 		logrus.Errorf("failed to get online users: %s", err)
 
 		userStatusMsg = nil
-	} else {
+	} else if len(onlineUsers) != 0 {
 		for user := range onlineUsers {
 			onlineUsers[user].Password = "zart!"
+
+		}
+
+		client, user := s.findUser(onlineUsers[0].Username)
+		if user == nil {
+			logrus.Errorf("failed getting conversation status, username not found in server")
+
+			return nil
 		}
 
 		userStatusCmd := command.UserStatus{Users: onlineUsers}
 		m := userStatusCmd.GetMessage()
 		userStatusMsg = &m
+		userStatusMsg.Sender = client.Conn.LocalAddr().String()
 		userStatusMsg.CalculateChecksum()
+	} else {
+
+		return nil
 	}
 
 	return userStatusMsg
@@ -107,7 +120,14 @@ func (s *Server) getUserStatusMsg() *common.Msg {
 func (s *Server) getConvStatusMsg(username string) *common.Msg {
 	convStatusMsg := &common.Msg{}
 	//sorry for here :D
-	conversations, err := s.ChatRepo.FindConversations(s.Clients[s.routingTable[username]].ID)
+	client, user := s.findUser(username)
+	if user == nil {
+		logrus.Errorf("failed getting conversation status, username not found in server")
+
+		return nil
+	}
+
+	conversations, err := s.ChatRepo.FindConversations(user.ID)
 	if err != nil {
 		logrus.Errorf("failed to get conversations list: %s", err)
 		convStatusMsg = nil
@@ -115,6 +135,7 @@ func (s *Server) getConvStatusMsg(username string) *common.Msg {
 		convStatusCmd := command.ConversationStatus{Conversations: conversations}
 		m := convStatusCmd.GetMessage()
 		convStatusMsg = &m
+		convStatusMsg.Sender = client.Conn.LocalAddr().String()
 		convStatusMsg.CalculateChecksum()
 	}
 
@@ -123,7 +144,7 @@ func (s *Server) getConvStatusMsg(username string) *common.Msg {
 func (s *Server) handleMsg(msg common.Msg) {
 	logrus.Debugf("received msg %v\n", msg)
 
-	if msg.Type == "login" {
+	if msg.Type == command.TypeLogin {
 		login, err := command.CreateLoginFromMsg(msg)
 		if err != nil {
 			logrus.Errorf("failed to handle login command: %s", err)
@@ -139,7 +160,7 @@ func (s *Server) handleMsg(msg common.Msg) {
 		}
 
 		logrus.Infof("logged %s in", login.Username)
-	} else if msg.Type == "signup" {
+	} else if msg.Type == command.TypeSignup {
 		signup, err := command.CreateSignupFromMsg(msg)
 		if err != nil {
 			logrus.Errorf("failed to handle signup command: %s", err)
@@ -155,9 +176,42 @@ func (s *Server) handleMsg(msg common.Msg) {
 		}
 
 		logrus.Infof("signed %s up", signup.Username)
+	} else if msg.Type == command.TypeJoinConversation {
+		join, err := command.CreateJoinConvFromMsg(msg)
+		if err != nil {
+			logrus.Errorf("failed to handle join conversation command: %s", err)
+			return
+		}
+
+		uids := make([]int, len(join.Participants))
+
+		for i, username := range join.Participants {
+			if user, err := s.UserRepo.FindUser(username); err != nil {
+				logrus.Errorf("could not find user in server")
+
+				return
+			} else {
+				uids[i] = user.ID
+			}
+		}
+
+		if err := HandleJoinConv(join, uids, s, s.routingTable[msg.Sender]); err != nil {
+			logrus.Errorf("failed joining conversation: %s", err)
+		}
+
+		logrus.Infof("user %s joined conversation %s successfully\n", join.Participants[0], join.ConversationName)
 	}
 }
 
+func (s *Server) findUser(username string) (*Client, *model.User) {
+	for client, user := range s.Clients {
+		if user.Username == username {
+			return client, user
+		}
+	}
+
+	return nil, nil
+}
 func StartServer(chatRepo model.ChatRepo, userRepo model.UserRepo) *Server {
 	server := &Server{
 		connect:      make(chan *Client),

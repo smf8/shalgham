@@ -15,6 +15,8 @@ func main(addr string) {
 	defer conn.Close()
 
 	client.Login(nil, nil)
+	time.Sleep(1 * time.Second)
+	client.JoinConversation(nil, nil)
 	time.Sleep(40 * time.Second)
 }
 

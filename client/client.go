@@ -17,7 +17,7 @@ import (
 type Client struct {
 	C             *server.Client
 	OnlineUsers   map[string]*model.User
-	Conversations map[string]model.Conversations
+	Conversations map[string]*model.Conversations
 }
 
 func Connect(address string) (net.Conn, *Client) {
@@ -36,6 +36,9 @@ func Connect(address string) (net.Conn, *Client) {
 	}
 
 	c := &Client{C: client}
+
+	c.OnlineUsers = make(map[string]*model.User)
+	c.Conversations = make(map[string]*model.Conversations)
 
 	go client.ReadMessage()
 	go client.SendMessage()
@@ -75,7 +78,7 @@ func Connect(address string) (net.Conn, *Client) {
 //}
 
 func (c Client) Login(g *gocui.Gui, v *gocui.View) error {
-	loginCmd := command.CreateLoginCommand("test", "test")
+	loginCmd := command.CreateLoginCommand("jigar", "joon")
 	msg := loginCmd.GetMessage()
 	msg.Sender = c.C.Conn.LocalAddr().String()
 	msg.Digest = msg.CalculateChecksum()
@@ -90,8 +93,24 @@ func (c Client) Login(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (c *Client) Signup(g *gocui.Gui, v *gocui.View) error {
-	loginCmd := command.CreateSignupCommand("test", "test")
-	msg := loginCmd.GetMessage()
+	signUpCmd := command.CreateSignupCommand("goosfand", "joon")
+	msg := signUpCmd.GetMessage()
+	msg.Sender = c.C.Conn.LocalAddr().String()
+	msg.Digest = msg.CalculateChecksum()
+
+	c.C.SendQueue <- msg
+	//fmt.Println(v.Buffer())
+	//v.Clear()
+	//
+	//v.Title = "password"
+	////g.SetKeybinding("password", )
+
+	return nil
+}
+
+func (c *Client) JoinConversation(g *gocui.Gui, v *gocui.View) error {
+	joinConvCmd := command.CreateJoinConvCmd("", false, []string{"jigar", "goosfand"})
+	msg := joinConvCmd.GetMessage()
 	msg.Sender = c.C.Conn.LocalAddr().String()
 	msg.Digest = msg.CalculateChecksum()
 
@@ -113,22 +132,37 @@ func (c *Client) HandleSignUp(msg common.Msg) {
 	fmt.Println(string(msg.Data))
 }
 
+func (c *Client) HandleConvStatus(msg common.Msg) {
+	conversations := make([]*model.Conversations, 0)
+	if err := json.Unmarshal(msg.Data, &conversations); err != nil {
+		logrus.Errorf("failed to parse conversation status: %s", err)
+	}
+
+	for _, conv := range conversations {
+		c.Conversations[conv.Name] = conv
+		fmt.Println(conv)
+	}
+}
+
 func (c *Client) HandleUserStatus(msg common.Msg) {
-	users := make([]*model.User, 0)
+	users := command.UserStatus{
+		Users: make([]*model.User, 0),
+	}
 
 	if err := json.Unmarshal(msg.Data, &users); err != nil {
 		logrus.Errorf("failed to parse user status: %s", err)
 	}
 
 	if len(c.OnlineUsers) == 0 {
-		for _, user := range users {
+		for _, user := range users.Users {
 			c.OnlineUsers[user.Username] = user
+			fmt.Println(user)
 		}
 	} else {
 		for username, user := range c.OnlineUsers {
 			found := false
 
-			for _, u := range users {
+			for _, u := range users.Users {
 				if u.Username == username {
 					found = true
 				}

@@ -1,7 +1,10 @@
 package server
 
 import (
+	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/smf8/shalgham/command"
@@ -51,9 +54,7 @@ func HandleLogin(cmd *command.Login, server *Server, client *Client) error {
 	server.Clients[client] = user
 
 	response := cmd.GetMessage()
-
 	response.Sender = client.Conn.LocalAddr().String()
-
 	response.Data = common.SuccessDataMessage()
 
 	client.SendQueue <- response
@@ -105,6 +106,49 @@ func HandleTextMessage(cmd *command.TextMessage, msg common.Msg,
 			}
 		}
 	}
+
+	return nil
+}
+
+func HandleJoinConv(cmd *command.JoinConversation, userIDs []int, server *Server, client *Client) error {
+	conversation := model.Conversations{Name: cmd.ConversationName}
+	conversation.Participants = make([]model.Participants, len(userIDs))
+
+	if !cmd.IsGroup {
+		usernames := []string{cmd.Participants[0], cmd.Participants[1]}
+		sort.Strings(usernames)
+		conversation.Name = strings.Join(usernames, "#")
+	}
+
+	for i, uid := range userIDs {
+		participant := model.Participants{
+			UserID: uid,
+		}
+		conversation.Participants[i] = participant
+	}
+
+	c, err := server.ChatRepo.FindConversation(conversation.Name)
+	if err != nil {
+		if errors.Is(err, model.ErrConversationNotFound) {
+			c = &conversation
+
+			if err := server.ChatRepo.SaveConversation(conversation); err != nil {
+				return fmt.Errorf("failed to create conversation: %w", err)
+			}
+		}
+
+		return fmt.Errorf("failed to get conversation with given name: %w", err)
+	} else if cmd.IsGroup {
+		conversation.Participants[0].ConversationID = int(c.ID)
+		c.Participants = append(c.Participants, conversation.Participants[0])
+
+		if err := server.ChatRepo.SaveParticipant(conversation.Participants[0]); err != nil {
+			return fmt.Errorf("failed to add participant to conversation: %w", err)
+		}
+	}
+
+	response := server.getConvStatusMsg(cmd.Participants[0])
+	client.SendQueue <- *response
 
 	return nil
 }

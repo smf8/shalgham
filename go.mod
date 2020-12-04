@@ -4,6 +4,10 @@ go 1.14
 
 require (
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
+	github.com/containerd/fifo v0.0.0-20201026212402-0724c46b320c // indirect
+	github.com/containerd/go-runc v0.0.0-20201020171139-16b287bc67d0 // indirect
+	github.com/containerd/ttrpc v1.0.2 // indirect
+	github.com/containerd/typeurl v1.0.1 // indirect
 	github.com/denisenkom/go-mssqldb v0.0.0-20200620013148-b91950f658ec // indirect
 	github.com/golang-migrate/migrate/v4 v4.11.0
 	github.com/google/go-cmp v0.5.1 // indirect
@@ -11,6 +15,7 @@ require (
 	github.com/jroimartin/gocui v0.4.0
 	github.com/knadh/koanf v0.14.0
 	github.com/nsf/termbox-go v0.0.0-20201124104050-ed494de23a00 // indirect
+	github.com/opencontainers/runc v0.1.1 // indirect
 	github.com/prometheus/client_golang v1.8.0
 	github.com/rashadansari/golang-code-template v0.0.0-20200704111611-ea8e01d868de
 	github.com/sirupsen/logrus v1.7.0
