@@ -13,7 +13,6 @@ import (
 
 	"github.com/jroimartin/gocui"
 	"github.com/sirupsen/logrus"
-	"github.com/smf8/shalgham/cmd/client/ui"
 	"github.com/smf8/shalgham/command"
 	"github.com/smf8/shalgham/common"
 	"github.com/smf8/shalgham/model"
@@ -77,6 +76,8 @@ func Connect(address string) (net.Conn, *Client) {
 					c.HandleUserStatus(msg)
 				} else if msg.Type == command.TypeConversationStatus {
 					c.handleConversationStatusMsg(msg)
+				} else if msg.Type == command.TypeSendText {
+					c.handleTextMessage(msg)
 				}
 			}
 		}
@@ -91,12 +92,35 @@ func (c *Client) SetUI(g *gocui.Gui) {
 
 func (c *Client) SubmitInput(g *gocui.Gui, v *gocui.View) error {
 	input := v.Buffer()
+	input = strings.TrimSpace(input)
+	messages, _ := g.View("messages")
+
 	if strings.HasPrefix(input, "/join") {
-		cName := strings.TrimRight(input, "/join ")
+		cName := strings.TrimLeft(input, "/join ")
+
+		v.Clear()
+		v.SetCursor(0, 0)
+
 		if _, ok := c.OnlineUsers[cName]; ok {
 			return c.JoinConversation(g, v, cName, []string{c.username, cName})
 		} else {
 			return c.JoinConversation(g, v, cName, []string{c.username})
+		}
+	} else {
+		if c.currentConv == nil {
+			v.Clear()
+			v.SetCursor(0, 0)
+
+			g.Update(func(g *gocui.Gui) error {
+				c.writeError("you must join a conversation first", messages)
+
+				return nil
+			})
+		} else {
+			c.SendTextMsg(input, g, v)
+			v.Clear()
+
+			return v.SetCursor(0, 0)
 		}
 	}
 
@@ -162,16 +186,26 @@ func (c *Client) Signup(g *gocui.Gui, v *gocui.View) error {
 
 func (c *Client) JoinConversation(g *gocui.Gui, v *gocui.View, cName string, participants []string) error {
 	c.convLock.RLock()
-	conv, _ := c.Conversations[cName]
+	conv, ok := c.Conversations[cName]
 	c.convLock.RUnlock()
-	msgView, _ := g.View("messages")
+	msgView, err := g.View("messages")
 
-	c.currentConv = conv
-	g.Update(func(g *gocui.Gui) error {
-		msgView.Title = conv.Name
+	if err != nil {
+		logrus.Errorf("loading messages view: %s", err)
+	}
 
-		return nil
-	})
+	if ok {
+		c.currentConv = conv
+		g.Update(func(g *gocui.Gui) error {
+			msgView.Title = conv.Name
+			msgView.Clear()
+			msgView.SetCursor(0, 0)
+
+			return nil
+		})
+	} else {
+
+	}
 
 	joinConvCmd := command.CreateJoinConvCmd(cName, len(participants) != 2, participants)
 	msg := joinConvCmd.GetMessage()
@@ -187,6 +221,30 @@ func (c *Client) Disconnect(g *gocui.Gui, v *gocui.View) error {
 	c.C.DisconnectChan <- c.C
 	return gocui.ErrQuit
 }
+
+func (c *Client) SendTextMsg(message string, g *gocui.Gui, v *gocui.View) error {
+	textMsg := command.CreateTextMessageCommand(c.username, message, c.currentConv.ID)
+	//messages, _ := g.View("messages")
+	msg := textMsg.GetMessage()
+	msg.Sender = c.C.Conn.LocalAddr().String()
+
+	//msgModel := model.Message{
+	//	Author:    c.username,
+	//	Body:      "message",
+	//	CreatedAT: time.Now(),
+	//}
+
+	g.Update(func(g *gocui.Gui) error {
+		//c.writeMessage(msgModel, messages)
+
+		return nil
+	})
+
+	c.C.SendQueue <- msg
+
+	return nil
+}
+
 func (c *Client) HandleLogin(msg common.Msg) {
 	fmt.Println(string(msg.Data), runtime.NumGoroutine())
 }
@@ -243,9 +301,9 @@ func (c *Client) LoadStatus(g *gocui.Gui) {
 			c.userLock.RLock()
 			if c.OnlineUsers[username].IsOnline {
 				onlineCount++
-				users.WriteString("ONLINE")
+				users.WriteString("\u001B[32;1mONLINE\u001B[0m")
 			} else {
-				users.WriteString("OFFLINE")
+				users.WriteString("\u001B[31;1mOFFLINE\u001B[0m")
 			}
 			c.userLock.RUnlock()
 
@@ -254,13 +312,21 @@ func (c *Client) LoadStatus(g *gocui.Gui) {
 
 		for _, cname := range cNames {
 			conversations.WriteString(cname)
-			conversations.WriteString("  ")
 
 			c.convLock.RLock()
-			if !strings.Contains(c.Conversations[cname].Name, "#") {
-				conversations.WriteString("G ")
+			found := false
+			for user := range c.OnlineUsers {
+				if c.Conversations[cname].Name == user {
+					found = true
+				}
+			}
+
+			if !found {
+				conversations.WriteString("-")
+				conversations.WriteString("G")
 				conversations.WriteString(fmt.Sprintf("%d", len(c.Conversations[cname].Participants)))
 			}
+			conversations.WriteString("\n")
 			c.convLock.RUnlock()
 		}
 
@@ -320,28 +386,75 @@ func (c *Client) HandleUserStatus(msg common.Msg) {
 
 func (c *Client) handleConversationStatusMsg(msg common.Msg) {
 	convs := command.ConversationStatus{}
-
 	if err := json.Unmarshal(msg.Data, &convs); err != nil {
 		logrus.Errorf("failed to parse conversation status: %s", err)
 	}
 
-	if len(c.Conversations) == 0 {
-		for _, conv := range convs.Conversations {
-			c.Conversations[conv.Name] = conv
+	//if len(c.Conversations) == 0 {
+	for _, conv := range convs.Conversations {
+		if strings.Contains(conv.Name, "#") {
+			s := strings.Split(conv.Name, "#")
+			if s[0] == c.username {
+				conv.Name = s[1]
+			} else {
+				conv.Name = s[0]
+			}
 		}
+		c.Conversations[conv.Name] = conv
 	}
+	//}
 
-	if len(convs.Conversations) == 1 && convs.Conversations[0].Name == c.currentConv.Name {
+	msgView, _ := c.ui.View("messages")
 
-		msgView, _ := c.ui.View("messages")
+	if len(convs.Conversations) == 1 && (c.currentConv != nil && strings.Contains(convs.Conversations[0].Name, c.currentConv.Name)) {
 
 		c.ui.Update(func(g *gocui.Gui) error {
 			for _, msg := range convs.Conversations[0].Messages {
-				ui.WriteMessage(msg, msgView)
+				c.writeMessage(msg, msgView)
 			}
 
 			return nil
 		})
 
 	}
+}
+
+func (c *Client) handleTextMessage(msg common.Msg) {
+	messageView, _ := c.ui.View("messages")
+	txtMsg, err := command.CreateTextMessageFromMsg(msg)
+	message := model.Message{
+		CreatedAT: time.Now(),
+	}
+
+	if err != nil || txtMsg == nil {
+		message.Body = "\u001B[31;1mERROR\u001B[0m"
+		message.Author = "NO ONE"
+		c.ui.Update(func(g *gocui.Gui) error {
+			c.writeMessage(message, messageView)
+
+			return nil
+		})
+
+		return
+	}
+
+	message.Author = txtMsg.Author
+	message.ConversationID = txtMsg.ConversationID
+	message.Body = txtMsg.Text
+
+	if c.currentConv.ID == txtMsg.ConversationID {
+		c.ui.Update(func(g *gocui.Gui) error {
+			c.writeMessage(message, messageView)
+
+			return nil
+		})
+	}
+}
+
+func (c *Client) writeMessage(msg model.Message, v *gocui.View) {
+	fmt.Fprintf(v, "\u001B[3%d;%dm[%s]\u001B[0m  \u001B[3%d;%dm%s\u001B[0m: %s\n", 3, 1, msg.CreatedAT.Format("2006-01-02 15:04:05"), 2, 7, msg.Author, msg.Body)
+}
+
+func (c *Client) writeError(msg string, v *gocui.View) {
+	fmt.Fprintf(v, "\u001B[3%d;%dm[%s]\u001B[0m\n", 1, 1, msg)
 }

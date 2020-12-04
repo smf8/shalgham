@@ -85,15 +85,16 @@ func HandleLogin(cmd *command.Login, server *Server, client *Client) error {
 
 func HandleTextMessage(cmd *command.TextMessage, msg common.Msg,
 	server *Server, client *Client) error {
-	if !msg.ValidateCheckSum() {
-		return fmt.Errorf("sent and received checksums are not equal")
-	}
+	//if !msg.ValidateCheckSum() {
+	//	return fmt.Errorf("sent and received checksums are not equal")
+	//}
 
 	go func() {
 		msgModel := model.Message{
 			ConversationID: cmd.ConversationID,
 			Body:           cmd.Text,
 			FromID:         server.Clients[client].ID,
+			Author:         cmd.Author,
 		}
 
 		if err := server.ChatRepo.SaveMessage(msgModel); err != nil {
@@ -149,15 +150,24 @@ func HandleJoinConv(cmd *command.JoinConversation, userIDs []int, server *Server
 
 		return fmt.Errorf("failed to get conversation with given name: %w", err)
 	} else if cmd.IsGroup {
-		conversation.Participants[0].ConversationID = int(c.ID)
-		c.Participants = append(c.Participants, conversation.Participants[0])
+		shouldAddUser := true
+		for _, p := range c.Participants {
+			if p.UserID == conversation.Participants[0].UserID {
+				shouldAddUser = false
+			}
+		}
 
-		if err := server.ChatRepo.SaveParticipant(conversation.Participants[0]); err != nil {
-			return fmt.Errorf("failed to add participant to conversation: %w", err)
+		if shouldAddUser {
+			conversation.Participants[0].ConversationID = int(c.ID)
+			c.Participants = append(c.Participants, conversation.Participants[0])
+
+			if err := server.ChatRepo.SaveParticipant(conversation.Participants[0]); err != nil {
+				return fmt.Errorf("failed to add participant to conversation: %w", err)
+			}
 		}
 	}
 
-	conv, err := server.ChatRepo.FindConversation(cmd.ConversationName)
+	conv, err := server.ChatRepo.FindConversation(conversation.Name)
 	if err != nil {
 		logrus.Errorf("failed to get conversation messages: %s", err)
 		return err
@@ -183,11 +193,14 @@ func notifyOnlines(server *Server) error {
 			if userStatus := server.getUserStatusMsg(users); userStatus != nil {
 				for client, user := range server.Clients {
 					if user.Username != "undefined" {
-						if convMsg := server.getConvStatusMsg(user.Username); convMsg != nil {
-							client.SendQueue <- *convMsg
+						var convMsg *common.Msg
+						if convMsg = server.getConvStatusMsg(user.Username); convMsg != nil {
 						}
 
-						client.SendQueue <- *userStatus
+						select {
+						case client.SendQueue <- *convMsg:
+						case client.SendQueue <- *userStatus:
+						}
 					}
 				}
 			}
