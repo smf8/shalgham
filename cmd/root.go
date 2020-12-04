@@ -25,7 +25,7 @@ func Execute() {
 	}
 
 	server.Register(root, cfg)
-	client.Register(root)
+	client.Register(root, cfg)
 	//migrate.Register(root, cfg)
 
 	if err := root.Execute(); err != nil {

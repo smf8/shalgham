@@ -200,6 +200,17 @@ func (s *Server) handleMsg(msg common.Msg) {
 		}
 
 		logrus.Infof("user %s joined conversation %s successfully\n", join.Participants[0], join.ConversationName)
+	} else if msg.Type == command.TypeSendText {
+		send, err := command.CreateTextMessageFromMsg(msg)
+		if err != nil {
+			logrus.Errorf("failed to create message command: %s", err)
+		}
+
+		if err = HandleTextMessage(send, msg, s, s.routingTable[msg.Sender]); err != nil {
+			logrus.Errorf("failed to send message to peers in server: %s", err)
+		}
+
+		logrus.Infof("sent text message successfully")
 	}
 }
 

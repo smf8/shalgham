@@ -1,6 +1,7 @@
 package log
 
 import (
+	"io/ioutil"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -11,6 +12,10 @@ func SetupLogger(cfg config.Logger) {
 	logLevel, err := logrus.ParseLevel(cfg.Level)
 	if err != nil {
 		logLevel = logrus.ErrorLevel
+	}
+
+	if !cfg.Enabled {
+		logrus.SetOutput(ioutil.Discard)
 	}
 
 	logrus.SetLevel(logLevel)

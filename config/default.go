@@ -11,7 +11,8 @@ var def = Config{
 	},
 
 	Logger: Logger{
-		Level: "debug",
+		Level:   "debug",
+		Enabled: true,
 	},
 
 	Postgres: Postgres{

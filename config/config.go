@@ -21,7 +21,8 @@ type (
 	}
 
 	Logger struct {
-		Level string `koanf:"level"`
+		Level   string `koanf:"level"`
+		Enabled bool   `koanf:"enabled"`
 	}
 
 	Postgres struct {

@@ -2,26 +2,29 @@ package client
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/smf8/shalgham/client"
+	"github.com/smf8/shalgham/cmd/client/ui"
+	"github.com/smf8/shalgham/config"
 	"github.com/spf13/cobra"
 )
 
-func main(addr string) {
-	//ui.ShowUI()
-	conn, client := client.Connect(addr)
+func main(cfg config.Config) {
+	conn, client := client.Connect(cfg.Server.Address)
+	//cfg.Logger.Enabled = false
 
+	//log.SetupLogger(cfg.Logger)
+	ui.ShowUI(client)
 	defer conn.Close()
 
-	client.Login(nil, nil)
-	time.Sleep(1 * time.Second)
-	client.JoinConversation(nil, nil)
-	time.Sleep(40 * time.Second)
+	//client.Login(nil, nil)
+	//time.Sleep(1 * time.Second)
+	//client.JoinConversation(nil, nil)
+	//time.Sleep(40 * time.Second)
 }
 
 // Register client command.
-func Register(root *cobra.Command) {
+func Register(root *cobra.Command, cfg config.Config) {
 	root.AddCommand(
 		&cobra.Command{
 			Use:   "client",
@@ -31,7 +34,7 @@ func Register(root *cobra.Command) {
 					return fmt.Errorf("usage: %s <address:port>", cmd.ValidArgs[0])
 				}
 
-				main(args[0])
+				main(cfg)
 
 				return nil
 			},
