@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"fmt"
+
 	"github.com/jroimartin/gocui"
 	"github.com/sirupsen/logrus"
 	"github.com/smf8/shalgham/client"
+	"github.com/smf8/shalgham/model"
 )
 
 func ShowUI(c *client.Client) {
@@ -46,4 +49,8 @@ func setCurrentViewOnTop(g *gocui.Gui, name string) (*gocui.View, error) {
 		return nil, err
 	}
 	return g.SetViewOnTop(name)
+}
+
+func WriteMessage(msg model.Message, v *gocui.View) {
+	fmt.Fprintf(v, "\u001B[3%d;%dm[%s]\u001B[0m  \u001B[3%d;%dm%s\u001B[0m: %s\n", 3, 1, msg.CreatedAT, 2, 7, msg.Author)
 }

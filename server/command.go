@@ -157,8 +157,19 @@ func HandleJoinConv(cmd *command.JoinConversation, userIDs []int, server *Server
 		}
 	}
 
-	response := server.getConvStatusMsg(cmd.Participants[0])
-	client.SendQueue <- *response
+	conv, err := server.ChatRepo.FindConversation(cmd.ConversationName)
+	if err != nil {
+		logrus.Errorf("failed to get conversation messages: %s", err)
+		return err
+	}
+
+	convStatusCmd := command.ConversationStatus{Conversations: []*model.Conversations{conv}}
+	msg := convStatusCmd.GetMessage()
+
+	msg.Sender = client.Conn.LocalAddr().String()
+	msg.CalculateChecksum()
+
+	client.SendQueue <- msg
 
 	return nil
 }
@@ -172,13 +183,15 @@ func notifyOnlines(server *Server) error {
 			if userStatus := server.getUserStatusMsg(users); userStatus != nil {
 				for client, user := range server.Clients {
 					if user.Username != "undefined" {
-						logrus.Infof("dili dili dili %s %v", user.Username, users)
+						if convMsg := server.getConvStatusMsg(user.Username); convMsg != nil {
+							client.SendQueue <- *convMsg
+						}
+
 						client.SendQueue <- *userStatus
 					}
 				}
 			}
 		}
-
 		<-time.After(1500 * time.Millisecond)
 	}
 
