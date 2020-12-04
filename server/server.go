@@ -207,12 +207,20 @@ func (s *Server) handleMsg(msg common.Msg) {
 			logrus.Errorf("failed to create message command: %s", err)
 		}
 
-		logrus.Println("\n\n\n --- ", msg.Sender)
 		if err = HandleTextMessage(send, msg, s, s.routingTable[msg.Sender]); err != nil {
 			logrus.Errorf("failed to send message to peers in server: %s", err)
 		}
 
 		logrus.Infof("sent text message successfully")
+	} else if msg.Type == command.TypeChangeUsername {
+		changeUsername, err := command.CreateChangeUsernameFromMsg(msg)
+		if err != nil {
+			logrus.Errorf("failed to change username: %s", err)
+		}
+
+		if err = HandleChangeUsername(changeUsername, s, s.routingTable[msg.Sender]); err != nil {
+			logrus.Errorf("failed to change username: %s", err)
+		}
 	}
 }
 

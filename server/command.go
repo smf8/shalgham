@@ -210,3 +210,20 @@ func notifyOnlines(server *Server) error {
 
 	return nil
 }
+
+func HandleChangeUsername(cmd *command.ChangeUsername, server *Server, client *Client) error {
+	cmd.Status = true
+
+	if err := server.UserRepo.ChangeUsername(cmd.OldUsername, cmd.NewUsername); err != nil {
+		logrus.Errorf("failed to change username: %s", err)
+		cmd.Status = false
+	}
+
+	server.Clients[client].Username = cmd.NewUsername
+
+	response := cmd.GetMessage()
+
+	client.SendQueue <- response
+
+	return nil
+}

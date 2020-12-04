@@ -78,6 +78,8 @@ func Connect(address string) (net.Conn, *Client) {
 					c.handleConversationStatusMsg(msg)
 				} else if msg.Type == command.TypeSendText {
 					c.handleTextMessage(msg)
+				} else if msg.Type == command.TypeChangeUsername {
+					c.handleChangeUsername(msg)
 				}
 			}
 		}
@@ -106,6 +108,12 @@ func (c *Client) SubmitInput(g *gocui.Gui, v *gocui.View) error {
 		} else {
 			return c.JoinConversation(g, v, cName, []string{c.username})
 		}
+	} else if strings.HasPrefix(input, "/change") {
+		newUsername := strings.TrimLeft(input, "/change ")
+
+		c.ChangeUsername(c.username, newUsername)
+		v.Clear()
+		v.SetCursor(0, 0)
 	} else {
 		if c.currentConv == nil {
 			v.Clear()
@@ -251,6 +259,17 @@ func (c *Client) HandleLogin(msg common.Msg) {
 
 func (c *Client) HandleSignUp(msg common.Msg) {
 	//fmt.Println(string(msg.Data))
+}
+
+func (c *Client) ChangeUsername(oldname, newname string) error {
+	chUsernameCmd := command.CreateChangeUsernameCmd(oldname, newname)
+
+	msg := chUsernameCmd.GetMessage()
+	msg.Sender = c.C.Conn.LocalAddr().String()
+
+	c.C.SendQueue <- msg
+
+	return nil
 }
 
 func (c *Client) updateStatus() ([]string, []string) {
@@ -451,10 +470,35 @@ func (c *Client) handleTextMessage(msg common.Msg) {
 	}
 }
 
+func (c *Client) handleChangeUsername(msg common.Msg) {
+	chUsernameCmd, err := command.CreateChangeUsernameFromMsg(msg)
+	if err != nil {
+		logrus.Errorf("failed to change username: %s", err)
+	}
+
+	messages, _ := c.ui.View("messages")
+
+	if chUsernameCmd.Status {
+		oldUser := c.OnlineUsers[c.username]
+		delete(c.OnlineUsers, c.username)
+		c.username = chUsernameCmd.NewUsername
+		oldUser.Username = c.username
+		c.OnlineUsers[c.username] = oldUser
+
+		c.writeLog("changed username successfully", messages)
+	} else {
+		c.writeError("Could not change username", messages)
+	}
+}
+
 func (c *Client) writeMessage(msg model.Message, v *gocui.View) {
 	fmt.Fprintf(v, "\u001B[3%d;%dm[%s]\u001B[0m  \u001B[3%d;%dm%s\u001B[0m: %s\n", 3, 1, msg.CreatedAT.Format("2006-01-02 15:04:05"), 2, 7, msg.Author, msg.Body)
 }
 
 func (c *Client) writeError(msg string, v *gocui.View) {
 	fmt.Fprintf(v, "\u001B[3%d;%dm[%s]\u001B[0m\n", 1, 1, msg)
+}
+
+func (c *Client) writeLog(msg string, v *gocui.View) {
+	fmt.Fprintf(v, "\u001B[3%d;%dm[%s]\u001B[0m\n", 6, 2, msg)
 }

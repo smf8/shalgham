@@ -22,6 +22,7 @@ type UserRepo interface {
 	Connect(username string) error
 	FindOnline() ([]*User, error)
 	FindAll() ([]*User, error)
+	ChangeUsername(old, new string) error
 }
 
 type SQLUserRepo struct {
@@ -80,4 +81,8 @@ func (s SQLUserRepo) FindAll() ([]*User, error) {
 	}
 
 	return users, nil
+}
+
+func (s SQLUserRepo) ChangeUsername(old, new string) error {
+	return s.DB.Model(&User{}).Where("username = ?", old).Update("username", new).Error
 }

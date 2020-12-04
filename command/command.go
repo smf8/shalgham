@@ -7,4 +7,5 @@ const (
 	TypeUserStatus         = "user-status"
 	TypeConversationStatus = "conversation-status"
 	TypeJoinConversation   = "join-conversation"
+	TypeChangeUsername     = "change-username"
 )
